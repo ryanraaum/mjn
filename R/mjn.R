@@ -25,13 +25,6 @@ mandist <- function (x)
     return(d)
 }
 
-
-M <- as.matrix(data.frame(c1=c(0,1,1,0),c2=c(0,3,0,3),c3=c(0,0,2,2),c4=c(0,0,1,0),c5=c(0,0,0,2)))
-#row.names(df) <- c('A', 'B', 'C', 'D')
-
-M2 <- as.matrix(data.frame(c1=c(1,1,1,0),c2=c(0,3,1,3),c3=c(0,0,2,2),c4=c(0,0,1,0),c5=c(0,0,0,2)))
-#row.names(df2) <- c('A', 'B', 'C', 'D')
-
 allunique.f <- function(x) { sum(!duplicated.default(x)) == 3 }
 
 median.vectors <- function(data) {
@@ -111,25 +104,29 @@ connection.cost <- function(triplet, mvec) {
 new.sequence.types <- function(data, edges, dsc, epsilon=0, lambda=NULL, prev.combos=NULL) {
   feasible.m <- edges[dsc$feasible,c('n1','n2')]
   combos <- combn(1:dsc$f.num, 2)
-  dups <- duplicated(cbind(prev.combos, combos), MARGIN=2)[-(1:ncol(prev.combos))]
-  combos <- combos[,!dups,drop=F]
+  if (length(prev.combos) > 0) {
+    dups <- duplicated(cbind(prev.combos, combos), MARGIN=2)[-(1:ncol(prev.combos))]
+    combos <- combos[,!dups,drop=F]
+  }
   mvecs <- data[F,]
   c.costs <- c()
-  for (i in 1:ncol(combos)) {
-    curr.m <- feasible.m[combos[,i],]
-    nodes <- my.unique(as.vector(curr.m))
-    if (length(nodes) == 3) {
-      triplet <- data[nodes,]
-      curr.mvecs <- median.vectors(triplet)
-      # remove vectors that already exist in the data
-      dups <- duplicated(rbind(data,mvecs,curr.mvecs))[-(1:(nrow(data)+nrow(mvecs)))]
-      curr.mvecs <- curr.mvecs[!dups,,drop=F]
-      d <- mandist(rbind(triplet, curr.mvecs))
-      nmvecs <- nrow(curr.mvecs)
-      if (nmvecs > 0) {
-        new.costs <- rowSums(as.matrix(d)[4:(nmvecs+3),1:3,drop=F])
-        c.costs <- c(c.costs, new.costs)
-        mvecs <- rbind(mvecs, curr.mvecs)
+  if (ncol(combos) > 0) {
+    for (i in 1:ncol(combos)) {
+      curr.m <- feasible.m[combos[,i],]
+      nodes <- my.unique(as.vector(curr.m))
+      if (length(nodes) == 3) {
+        triplet <- data[nodes,]
+        curr.mvecs <- median.vectors(triplet)
+        # remove vectors that already exist in the data
+        dups <- duplicated(rbind(data,mvecs,curr.mvecs))[-(1:(nrow(data)+nrow(mvecs)))]
+        curr.mvecs <- curr.mvecs[!dups,,drop=F]
+        d <- mandist(rbind(triplet, curr.mvecs))
+        nmvecs <- nrow(curr.mvecs)
+        if (nmvecs > 0) {
+          new.costs <- rowSums(as.matrix(d)[4:(nmvecs+3),1:3,drop=F])
+          c.costs <- c(c.costs, new.costs)
+          mvecs <- rbind(mvecs, curr.mvecs)
+        }
       }
     }
   }
@@ -150,6 +147,7 @@ new.sequence.types <- function(data, edges, dsc, epsilon=0, lambda=NULL, prev.co
 
 
 mjn <- function(data, epsilon=0) {
+  if (is.null(row.names(data))) { rownames(data) <- 1:nrow(data) }
   starting.rownames <- rownames(data)
   sampled <- 1:nrow(data)
   rownames(data) <- sampled
@@ -165,7 +163,7 @@ mjn <- function(data, epsilon=0) {
     inferred <- setdiff(1:nrow(data), sampled)
     todrop <- c()
     for (i in inferred) {
-      vindex <- inferred - 1
+      vindex <- i - 1
       if (length(V(dsc$g)[nei(vindex)]) <= 2) {
         todrop <- c(todrop, i)
       }
@@ -183,14 +181,53 @@ mjn <- function(data, epsilon=0) {
   edges <- t(rbind(combn(as.integer(rownames(data)),2), as.vector(distances)))
   colnames(edges) <- c("n1", "n2", "d")
   final.dsc <- delta.step.components(edges, 0)
-  list(g=final.dsc$g, data=data)
+  
+  num.inferred.nodes <- nrow(data) - length(starting.rownames)
+  inferred <- c(rep(F, length(starting.rownames)), rep(T, num.inferred.nodes))
+  if (num.inferred.nodes > 0) {
+    starting.rownames <- c(starting.rownames, 
+                           paste('i', 1:num.inferred.nodes, sep=''))
+  }
+  rownames(data) <- starting.rownames
+  g=final.dsc$g
+  V(g)$name <- starting.rownames
+  V(g)$inferred <- inferred
+  ret <- list(g=g, data=data)
+  class(ret) <- 'mjn'
+  ret
 }
 
-LABS = c(LETTERS[1:4], LETTERS[21:26])
+map.colors <- function(color.map, ids, default.color) {
+  col <- color.map[ids]
+  col[is.na(col)] <- default.color
+  col
+}
 
-x <- mjn(M,2)
-g <- x$g
-plot(g, layout=layout.fruchterman.reingold(g, weights=1/E(g)$weight), edge.label=E(g)$weight, vertex.label=LABS[1:length(V(g))])
+plot.mjn <- function(x, vsize=5, vlabel=NULL, 
+                     default.color="grey",
+                     cmap=NULL,
+                     layout=NULL,
+                     inferred.shape='circle',
+                     inferred.size=0.5) {
+  g <- x$g
+  V(g)$size <- vsize
+  V(g)[V(g)$inferred]$size <- vsize * inferred.size
+  V(g)$shape <- "circle"
+  V(g)[V(g)$inferred]$shape <- inferred.shape
+  vcolor <- default.color
+  if (!is.null(cmap)) {
+    vcolor <- map.colors(cmap, V(g)$name, default.color)
+  }
+  if (is.null(vlabel)) { vlabel <- V(g)$name }
+  if (is.null(layout)) { 
+    layout <- layout.fruchterman.reingold(g, weights=E(g)$weight)
+  }
+  plot(g, 
+       layout=layout, 
+       #vertex.size=vsize, 
+       vertex.label=vlabel, 
+       vertex.color=vcolor)
+}
 
 
 
