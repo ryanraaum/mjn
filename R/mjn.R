@@ -1,6 +1,7 @@
 options(stringsAsFactors=F)
 
 library(igraph)
+library(shape)
 
 my.mode <- function(x, n=3) {
   x <- sort.default(x)
@@ -139,7 +140,8 @@ new.sequence.types <- function(data, edges, dsc, epsilon=0, lambda=NULL, prev.co
   }
   prev.combos <- cbind(prev.combos, combos)
   if (sum(keep)) {
-    return(list(n=sum(keep), costs=c.costs[keep], median.vectors=mvecs[keep,], lambda=lambda, prev.combos=prev.combos))
+    return(list(n=sum(keep), costs=c.costs[keep], median.vectors=mvecs[keep,], 
+                lambda=lambda, prev.combos=prev.combos))
   } else {
     return(list(n=0, costs=c(), median.vectors=data[F,], lambda=lambda))
   }
@@ -203,15 +205,22 @@ map.colors <- function(color.map, ids, default.color) {
   col
 }
 
-plot.mjn <- function(x, vsize=5, vlabel=NULL, 
+# cmap is a named vector of colors; names are vertex names
+# count is a vector of haplotype counts in vertex order
+# cprops is a list, named by vertex name, with proportions of colors
+plot.mjn <- function(x, vsize=10, vlabel=NULL, 
+                     count=1,
+                     props=NULL,
                      default.color="grey",
                      cmap=NULL,
                      layout=NULL,
                      inferred.shape='circle',
                      inferred.size=0.5) {
   g <- x$g
-  V(g)$size <- vsize
-  V(g)[V(g)$inferred]$size <- vsize * inferred.size
+  count <- count[V(g)$name]
+  count[is.na(count)] <- 1
+  V(g)$size <- sqrt(count*vsize^2)
+  V(g)[V(g)$inferred]$size <- V(g)[V(g)$inferred]$size * inferred.size
   V(g)$shape <- "circle"
   V(g)[V(g)$inferred]$shape <- inferred.shape
   vcolor <- default.color
@@ -224,9 +233,30 @@ plot.mjn <- function(x, vsize=5, vlabel=NULL,
   }
   plot(g, 
        layout=layout, 
-       #vertex.size=vsize, 
        vertex.label=vlabel, 
        vertex.color=vcolor)
+  
+  if (!is.null(props)) {
+    selector <- V(g)$name %in% names(props)
+    if (any(selector)) {
+      coords <- layout.norm(layout,-1,1,-1,1)[selector,]
+      rownames(coords) <- V(g)[selector]$name
+      for (nam in names) {
+        props <- lprops[nam][[1]]
+        cols <- names(props)
+        from <- 0
+        radius <- V(g)[nam]$size/200
+        mid <- coords[nam,]
+        for (i in 1:length(props)) {
+          to <- from + props[i] * 2*pi
+          if (to > pi) { to <- to - 2*pi }
+          xyvals <- rbind(mid, getellipse(radius, mid=mid, from=from, to=to), mid)
+          polygon(xyvals, col=cols[i], border=NA)
+          from <- to
+        }
+      }
+    }
+  }
 }
 
 
