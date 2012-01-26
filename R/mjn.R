@@ -241,7 +241,7 @@ plot.mjn <- function(x, vsize=10, vlabel=NULL,
     if (any(selector)) {
       coords <- layout.norm(layout,-1,1,-1,1)[selector,]
       rownames(coords) <- V(g)[selector]$name
-      for (nam in names) {
+      for (nam in V(g)[selector]$name) {
         props <- lprops[nam][[1]]
         cols <- names(props)
         from <- 0
@@ -259,5 +259,26 @@ plot.mjn <- function(x, vsize=10, vlabel=NULL,
   }
 }
 
-
+mjn.merge <- function(mjn.list) {
+  combined.data <- do.call("rbind", lapply(mjn.list, function(x) { x$data } ))
+  graphs <- lapply(mjn.list, function(x) { x$g } )
+  G <- graph.disjoint.union(graphs)
+  node.starting.index <- 0
+  edge.starting.index <- 0
+  for (i in 1:length(graphs)) {
+    g <- graphs[[i]]
+    num.nodes <- length(V(g))
+    num.edges <- length(E(g))
+    node.indices <- node.starting.index:(node.starting.index + num.nodes - 1)
+    edge.indices <- edge.starting.index:(edge.starting.index + num.edges - 1)
+    node.starting.index <- max(node.indices) + 1
+    edge.starting.index <- max(edge.indices) + 1
+    V(G)[node.indices]$name <- V(g)$name
+    V(G)[node.indices]$inferred <- V(g)$inferred
+    E(G)[edge.indices]$weight <- E(g)$weight
+  }
+  ret <- list(g=G, data=combined.data)
+  class(ret) <- 'mjn'
+  ret
+}
 
