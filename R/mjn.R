@@ -1,5 +1,6 @@
 options(stringsAsFactors=F)
 
+library(methods)
 library(igraph)
 library(shape)
 
