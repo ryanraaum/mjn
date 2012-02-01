@@ -148,8 +148,18 @@ new.sequence.types <- function(data, edges, dsc, epsilon=0, lambda=NULL, prev.co
   }
 }
 
+identify.obsoletes <- function(g, indices) {
+  todrop <- c()
+  for (i in indices) {
+    vindex <- i - 1
+    if (length(V(g)[nei(vindex)]) <= 2) {
+      todrop <- c(todrop, i)
+    }
+  }
+  todrop
+}
 
-mjn <- function(data, epsilon=0) {
+mjn <- function(data, epsilon=0, inferred.prefix='i') {
   if (is.null(row.names(data))) { rownames(data) <- 1:nrow(data) }
   starting.rownames <- rownames(data)
   sampled <- 1:nrow(data)
@@ -160,39 +170,40 @@ mjn <- function(data, epsilon=0) {
     edges <- t(rbind(combn(as.integer(rownames(data)),2), as.vector(distances)))
     colnames(edges) <- c("n1", "n2", "d")
     dsc <- delta.step.components(edges, epsilon)
-    
-    # check for obsolete sequence types
-    # if obsolete exist, remove them and redo delta step componenets
-    inferred <- setdiff(1:nrow(data), sampled)
-    todrop <- c()
-    for (i in inferred) {
-      vindex <- i - 1
-      if (length(V(dsc$g)[nei(vindex)]) <= 2) {
-        todrop <- c(todrop, i)
-      }
-    }
-    if (length(todrop) > 0) {
-      data <- data[-todrop,]
+
+# I think for the set epsilon that the new sequence types code already ensures
+# that there are no obsolete sequence types
+#     obsoletes <- identify.obsoletes(dsc$g, setdiff(1:nrow(data), sampled))
+#     if (length(obsoletes) > 0) {
+#       data <- data[-obsoletes,]
+#       row.names(data) <- 1:nrow(data)
+#     } else {
+    x <- new.sequence.types(data, edges, dsc, epsilon, x$lambda, x$prev.combos)
+    data <- rbind(data,x$median.vectors)
+    rownames(data) <- 1:nrow(data)
+#     }
+  }
+  repeat {
+    distances <- mandist(data)
+    edges <- t(rbind(combn(as.integer(rownames(data)),2), as.vector(distances)))
+    colnames(edges) <- c("n1", "n2", "d")
+    dsc <- delta.step.components(edges, 0)
+    obsoletes <- identify.obsoletes(dsc$g, setdiff(1:nrow(data), sampled))
+    if (length(obsoletes) > 0) {
+      data <- data[-obsoletes,]
       row.names(data) <- 1:nrow(data)
     } else {
-      x <- new.sequence.types(data, edges, dsc, epsilon, x$lambda, x$prev.combos)
-      data <- rbind(data,x$median.vectors)
-      rownames(data) <- 1:nrow(data)
+      break
     }
   }
-  distances <- mandist(data)
-  edges <- t(rbind(combn(as.integer(rownames(data)),2), as.vector(distances)))
-  colnames(edges) <- c("n1", "n2", "d")
-  final.dsc <- delta.step.components(edges, 0)
-  
   num.inferred.nodes <- nrow(data) - length(starting.rownames)
   inferred <- c(rep(F, length(starting.rownames)), rep(T, num.inferred.nodes))
   if (num.inferred.nodes > 0) {
     starting.rownames <- c(starting.rownames, 
-                           paste('i', 1:num.inferred.nodes, sep=''))
+                           paste(inferred.prefix, 1:num.inferred.nodes, sep=''))
   }
   rownames(data) <- starting.rownames
-  g=final.dsc$g
+  g=dsc$g
   V(g)$name <- starting.rownames
   V(g)$inferred <- inferred
   ret <- list(g=g, data=data)
@@ -216,7 +227,8 @@ plot.mjn <- function(x, vsize=10, vlabel=NULL,
                      cmap=NULL,
                      layout=NULL,
                      inferred.shape='circle',
-                     inferred.size=0.5) {
+                     inferred.size=0.5,
+                     elabel=NULL) {
   g <- x$g
   count <- count[V(g)$name]
   count[is.na(count)] <- 1
@@ -229,8 +241,12 @@ plot.mjn <- function(x, vsize=10, vlabel=NULL,
     vcolor <- map.colors(cmap, V(g)$name, default.color)
   }
   if (is.null(vlabel)) { vlabel <- V(g)$name }
+  if (is.null(elabel)) {
+    E(g)$label <- round(E(g)$weight)
+  }
   if (is.null(layout)) { 
-    layout <- layout.fruchterman.reingold(g, weights=E(g)$weight)
+    wmax <- max(E(g)$weight)
+    layout <- layout.fruchterman.reingold(g, weights=wmax/E(g)$weight)
   }
   plot(g, 
        layout=layout, 
@@ -269,14 +285,18 @@ mjn.merge <- function(mjn.list) {
   for (i in 1:length(graphs)) {
     g <- graphs[[i]]
     num.nodes <- length(V(g))
+    if (num.nodes > 0) {
+      node.indices <- node.starting.index:(node.starting.index + num.nodes - 1)
+      node.starting.index <- max(node.indices) + 1
+      V(G)[node.indices]$name <- V(g)$name
+      V(G)[node.indices]$inferred <- V(g)$inferred
+    }
     num.edges <- length(E(g))
-    node.indices <- node.starting.index:(node.starting.index + num.nodes - 1)
-    edge.indices <- edge.starting.index:(edge.starting.index + num.edges - 1)
-    node.starting.index <- max(node.indices) + 1
-    edge.starting.index <- max(edge.indices) + 1
-    V(G)[node.indices]$name <- V(g)$name
-    V(G)[node.indices]$inferred <- V(g)$inferred
-    E(G)[edge.indices]$weight <- E(g)$weight
+    if (num.edges > 0) {
+      edge.indices <- edge.starting.index:(edge.starting.index + num.edges - 1)
+      edge.starting.index <- max(edge.indices) + 1
+      E(G)[edge.indices]$weight <- E(g)$weight
+    }
   }
   ret <- list(g=G, data=combined.data)
   class(ret) <- 'mjn'
