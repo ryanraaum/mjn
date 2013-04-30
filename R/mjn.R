@@ -15,16 +15,20 @@ my.mode <- function(x, n=3) {
 
 my.unique <- function (x) { x[!duplicated.default(x)] }
 
-mandist <- function (x)
-{
-    N <- nrow(x)
-    d <- .C("R_distance", x = as.double(x), nr = N, nc = ncol(x), 
-        d = double(N * (N - 1)/2), diag = as.integer(FALSE), 
-        method = as.integer(3), p = 2.0, DUP = FALSE, 
-        NAOK = TRUE, PACKAGE = "stats")$d
-    attr(d, "Size") <- N
-    class(d) <- "dist"
-    return(d)
+# mandist <- function (x)
+# {
+#     N <- nrow(x)
+#     d <- .C("R_distance", x = as.double(x), nr = N, nc = ncol(x), 
+#         d = double(N * (N - 1)/2), diag = as.integer(FALSE), 
+#         method = as.integer(3), p = 2.0, DUP = FALSE, 
+#         NAOK = TRUE, PACKAGE = "stats")$d
+#     attr(d, "Size") <- N
+#     class(d) <- "dist"
+#     return(d)
+# }
+
+mandist <- function(x) {
+  dist(x, method="manhattan")
 }
 
 allunique.f <- function(x) { sum(!duplicated.default(x)) == 3 }
@@ -42,17 +46,12 @@ median.vectors <- function(data) {
   return(as.matrix(expand.grid(as.list(env), KEEP.OUT.ATTRS=F)[,varnames])) # order gets rearranged in the process
 }
 
-# igraph indices are 0-based, so need to subtract 1
-#  supposedly R-igraph is moving to 1-based at some point, 
-#  so will need to watch this
-i2v <- function(x) { x - 1}
-
 test.all.edge.lengths <- function(x, g, value) {
   all(E(g, path=x)$weight < value) 
 }
 
 connected.f <- function(edge, g, delta, epsilon) {
-  v.ids <- i2v(edge[1:2])
+  v.ids <- edge[1:2]
   if (edge.connectivity(g, v.ids[1], v.ids[2]) == 0) { return(FALSE) }
   if (are.connected(g, v.ids[1], v.ids[2])) { return(TRUE) }
   p <- get.shortest.paths(g, v.ids[1], v.ids[2])
@@ -62,7 +61,7 @@ connected.f <- function(edge, g, delta, epsilon) {
 add.nodes <- function(g, edges) {
   node.ids <- unlist(t(edges[,c('n1','n2')]))
   node.weights <- edges[,'d']
-  add.edges(g, i2v(node.ids), attr=list(weight=node.weights))
+  add.edges(g, node.ids, attr=list(weight=node.weights))
 }
 
 delta.step.components <- function(edges, epsilon=0) {
@@ -256,16 +255,16 @@ plot.mjn <- function(x, vsize=10, vlabel=NULL,
   if (!is.null(props)) {
     selector <- V(g)$name %in% names(props)
     if (any(selector)) {
-      coords <- layout.norm(layout,-1,1,-1,1)[selector,]
+      coords <- layout.norm(layout,-1,1,-1,1)[selector,,drop=FALSE]
       rownames(coords) <- V(g)[selector]$name
       for (nam in V(g)[selector]$name) {
-        props <- lprops[nam][[1]]
-        cols <- names(props)
+        cprops <- props[nam][[1]]
+        cols <- names(cprops)
         from <- 0
         radius <- V(g)[nam]$size/200
         mid <- coords[nam,]
-        for (i in 1:length(props)) {
-          to <- from + props[i] * 2*pi
+        for (i in 1:length(cprops)) {
+          to <- from + cprops[i] * 2*pi
           if (to > pi) { to <- to - 2*pi }
           xyvals <- rbind(mid, getellipse(radius, mid=mid, from=from, to=to), mid)
           polygon(xyvals, col=cols[i], border=NA)
