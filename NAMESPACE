@@ -1,2 +1,2 @@
-import(igraph)
-export(mjn)
+useDynLib(mjn)
+exportPattern("^[[:alpha:]]+")
