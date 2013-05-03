@@ -1,123 +1,136 @@
-#include <Rcpp.h>
-#include <algorithm> 
-#include <iostream> 
-#include <igraph/igraph.h>
-using namespace Rcpp;
+#include "mjn.hpp"
 
-typedef std::pair<int, int> Combination;
 
-IntegerMatrix manhattanDist(IntegerMatrix M) 
+void printDataVectors (std::vector<std::vector<int> > x)
+{
+  for (std::vector<std::vector<int> >::iterator xit=x.begin(); xit!=x.end(); ++xit) {
+    for (std::vector<int>::iterator yit=xit->begin(); yit!=xit->end(); ++yit) {
+      std::cout << *yit << " ";
+    }
+    std::cout << std::endl;
+  }  
+}
+
+void printCombos (std::set<Combination> combos)
+{
+  std::set<Combination>::iterator cit;
+  
+  for (cit=combos.begin(); cit!=combos.end(); ++cit) {
+    std::cout << cit->first << " " << cit->second << std::endl;
+  }
+}
+
+
+void printIntVector (std::vector<int> x)
+{
+  for (std::vector<int>::iterator it=x.begin(); it!=x.end(); ++it) {
+    std::cout << *it << " ";
+  }  
+  std::cout << std::endl;
+}
+
+
+std::vector<std::vector<int> > manDist(std::vector<std::vector<int> > *x) 
 {
     int sum;
-    int nrows = M.nrow();
-    int ncols = M.ncol();
-    IntegerMatrix D(nrows);
+    int nrows = x->size();
+    int ncols = (*x)[0].size();
+    std::vector<std::vector<int> > D (nrows, std::vector<int> (nrows));
+    
     for (int i = 0; i < (nrows-1); i++) {
       for (int j = i + 1; j < nrows; j++) {
         sum = 0;
         for (int k = 0; k < ncols; k++) {
-          sum = sum + abs(M(i,k) - M(j,k));
+          sum = sum + abs((*x)[i][k] - (*x)[j][k]);
         }
-        D(i,j) = sum;
-        D(j,i) = sum;
+        D[i][j] = sum;
+        D[j][i] = sum;
       }
     }
     return D;
 }
 
-std::vector<bool> connected (IntegerMatrix edges, 
-                             const igraph_t *graph_p, 
-                             const igraph_vector_t *weights_p, 
-                             int delta, int epsilon) 
+std::vector<bool> connected (std::vector<std::vector<int> > *edges, 
+                             igraph_t *g, 
+                             igraph_vector_t *weights, 
+                             int delta, 
+                             int epsilon) 
 {
-  std::vector<bool> result (edges.nrow(), false);
-  igraph_matrix_t pathlengths;
-  igraph_matrix_init(&pathlengths, 1, 1);
-  igraph_vs_t from;
-  igraph_vs_t to;
+  std::vector<bool> result (edges->size(), false);
   igraph_bool_t areconnected;
+  igraph_vector_t epath, vpath;
   int nedges;
+  int eindex; 
+  long int numedges;
+  bool all_less;
   
-  for (int i = 0; i < edges.nrow(); i++) {
-    igraph_st_edge_connectivity(graph_p, &nedges, edges(i,0), edges(i,1));
-    igraph_are_connected(graph_p, edges(i,0), edges(i,1), &areconnected);
+  for (int i = 0; i < edges->size(); i++) {
+    igraph_st_edge_connectivity(g, &nedges, (*edges)[i][0], (*edges)[i][1]);
+    igraph_are_connected(g, (*edges)[i][0], (*edges)[i][1], &areconnected);
     
     if (nedges == 0) {
       result[i] = false;
     } else if ((nedges > 0) && areconnected) {
       result[i] = true;
     } else if (nedges > 0) {
-      igraph_vs_1(&from, edges(i,0));
-      igraph_vs_1(&to, edges(i,1));
-      igraph_shortest_paths_dijkstra(graph_p, &pathlengths, from, to, weights_p, IGRAPH_ALL);
-      if (MATRIX(pathlengths, 0, 0) < (delta - epsilon)) {
-        result[i] = true;
+      igraph_vector_init(&vpath, 0);
+      igraph_vector_init(&epath, 0);
+      igraph_get_shortest_path_dijkstra(g, &vpath, &epath, (*edges)[i][0], (*edges)[i][1], weights, IGRAPH_ALL);
+      numedges = igraph_vector_size(&epath);
+      all_less = true;
+      for (int k = 0; k < numedges; k++) {
+        eindex = VECTOR(epath)[k];
+        all_less = all_less && (VECTOR(*weights)[eindex] < (delta - epsilon));
       }
-      igraph_vs_destroy(&from);
-      igraph_vs_destroy(&to);
+      result[i] = all_less;
+      igraph_vector_destroy(&epath);
+      igraph_vector_destroy(&vpath);
     }
   }
-  
-  igraph_matrix_destroy(&pathlengths);
   return result;
 }
 
-int nnodes (IntegerMatrix edges) 
+int nNodes (std::vector<std::vector<int> > *edges) 
 {
   std::vector<int> all_nodes;
-  for (int i=0; i < edges.nrow(); i++) {
-    for (int j=0; j < edges.ncol(); j++) {
-      all_nodes.push_back(edges(i,j));
+  for (int i=0; i < edges->size(); i++) {
+    for (int j=0; j < (*edges)[0].size(); j++) {
+      all_nodes.push_back((*edges)[i][j]);
     }
   }
   std::set<int> unodes (all_nodes.begin(), all_nodes.end());
   return unodes.size();  
 }
 
-void addFeasibleEdges (IntegerMatrix edges, 
-                         IntegerVector deltas, 
-                         int epsilon, 
-                         double delta,
-                         igraph_t *g_ptr, 
-                         igraph_vector_t *weights_ptr, 
-                         std::vector<bool> *feasible_ptr) 
+void addFeasibleEdges (std::vector<std::vector<int> > *edges, 
+                       std::vector<int> *deltas, 
+                       int epsilon, 
+                       int delta,
+                       igraph_t *g, 
+                       igraph_vector_t *weights, 
+                       std::vector<bool> *feasible) 
 {
   std::vector<bool> already_connected;
-  std::vector<bool> newly_feasible (deltas.size(), false);
+  std::vector<bool> newly_feasible (deltas->size(), false);
   int num_newfeasible;
     
-  already_connected = connected(edges, g_ptr, weights_ptr, delta, epsilon);
-  for (int i = 0; i < edges.nrow(); i++) {
-    if ((deltas[i] <= delta) && !(already_connected[i]) && !((*feasible_ptr)[i])) {
+  already_connected = connected(edges, g, weights, delta, epsilon);
+  for (int i = 0; i < edges->size(); i++) {
+    if (((*deltas)[i] <= delta) && !(already_connected[i]) && !((*feasible)[i])) {
       newly_feasible[i] = true;
-      (*feasible_ptr)[i] = true;
+      (*feasible)[i] = true;
     }
   }
     
   num_newfeasible = std::count(newly_feasible.begin(), newly_feasible.end(), true);
   if (num_newfeasible > 0) {
-    for (int i = 0; i < edges.nrow(); i++) {
+    for (int i = 0; i < edges->size(); i++) {
       if (newly_feasible[i]) {
-        igraph_add_edge(g_ptr, edges(i,0), edges(i,1));
-        igraph_vector_push_back(weights_ptr, deltas[i]);
+        igraph_add_edge(g, (*edges)[i][0], (*edges)[i][1]);
+        igraph_vector_push_back(weights, (*deltas)[i]);
       }
     }
   }
-}
-
-std::vector<int> identifyObsoletes (igraph_t *g_ptr, std::vector<int> indices) 
-{
-  std::vector<int> result;
-  igraph_vector_t neighbors;
-  igraph_vector_init(&neighbors, 1);
-  
-  for (std::vector<int>::iterator it=indices.begin(); it!=indices.end(); ++it) {
-    igraph_neighbors(g_ptr, &neighbors, *it, IGRAPH_ALL);
-    if (igraph_vector_size(&neighbors) <= 2) {
-      result.push_back(*it);
-    }
-  }
-  return result;
 }
 
 std::set<Combination> allPairs (int n)
@@ -129,20 +142,6 @@ std::set<Combination> allPairs (int n)
     }
   }
   return combos;
-}
-
-std::set<Combination> convert2Set(IntegerMatrix prev_combos)
-{
-  std::set<Combination> prior_combos;
-  
-  if (prev_combos.nrow() > 0 && prev_combos.ncol() != 2) {
-    throw(Rcpp::exception("prev_combos does not have 2 columns"));
-  }
-  for (int i = 0; i < prev_combos.nrow(); i++) {
-    prior_combos.insert(Combination(prev_combos(i,0), prev_combos(i,1)));
-  }
-  
-  return prior_combos;
 }
 
 std::vector<std::vector<int> > medianVectors(std::vector<std::vector<int> > triplet) 
@@ -208,110 +207,167 @@ std::vector<std::vector<int> > medianVectors(std::vector<std::vector<int> > trip
   return mvecs;
 }
 
-// [[Rcpp::export]]
-List newSequenceTypes (IntegerMatrix data, 
-                       IntegerMatrix edges, 
-                       std::vector<bool> feasible,
-                       int epsilon,
-                       double lambda,
-                       IntegerMatrix prev_combos) 
+
+void eraseDuplicates (std::vector<std::vector<int> > *new_vectors, 
+                      std::vector<std::vector<int> > *existing) 
 {
-  List returnList;
-  int row;
   bool all_equal;
+  std::set<int, std::greater<int> > toerase;
+  
+  for (int k = 0; k < new_vectors->size(); k++) {
+    for (int i = 0; i < existing->size(); i++) {
+      all_equal = true;
+      for (int j = 0; j < (*existing)[i].size(); j++) {
+        all_equal = all_equal && (*existing)[i][j] == (*new_vectors)[k][j];
+      }
+      if (all_equal) {
+        toerase.insert(k);
+      }
+    }
+  }
+  for (std::set<int>::iterator it=toerase.begin(); it!=toerase.end(); ++it) {
+    new_vectors->erase(new_vectors->begin()+(*it));
+  }                        
+}
+
+std::vector<int> calcConnectionCosts(std::vector<std::vector<int> > triplet, 
+                                     std::vector<std::vector<int> > new_vectors)
+{
+  int cost;
+  std::vector<int> result;
+  
+  // iterate through rows of new_vectors
+  for (std::vector<std::vector<int> >::iterator xit=new_vectors.begin(); xit!=new_vectors.end(); ++xit) {
+    cost = 0;
+    // for each row of new_vectors, iterate through all rows of triplet
+    for (std::vector<std::vector<int> >::iterator tit=triplet.begin(); tit!=triplet.end(); ++tit) {
+      // iterate through columns of both triplets and new_vectors
+      for (int i = 0; i < tit->size(); i++) {
+        cost = cost + abs((*tit)[i] - (*xit)[i]);
+      }
+    }
+    result.push_back(cost);
+  }
+  
+  return result;
+}
+
+std::vector<std::vector<int> > convert2Matrix (IntegerMatrix *x) 
+{
+  std::vector<std::vector<int> > y (x->nrow(), std::vector<int> (x->ncol()));
+  
+  for (int i = 0; i < x->nrow(); i++) {
+    for (int j = 0; j < x->ncol(); j++) {
+      y[i][j] = (*x)(i,j);
+    }
+  }
+  
+  return y;
+}
+
+int newSequenceTypes (std::vector<std::vector<int> > *data,
+                  std::vector<std::vector<int> > *edges,
+                  std::vector<bool> feasible,
+                  int epsilon,
+                  int *lambda,
+                  std::set<Combination> *prior_combos,
+                  std::vector<std::vector<int> > *mvecs)
+{
+  int row;
   std::vector<int> v0, v1;
-  std::set<Combination> combos, prior_combos;
-  std::set<Combination>::iterator it, pit;
+  std::set<Combination> combos;
+  std::set<Combination>::iterator cit, pit;
   std::set<int> v_set;
   std::set<int>::iterator v_it;
   std::set<int, std::greater<int> > toerase;
-  
-  std::vector<std::vector<int> > mvecs;
-  std::vector<std::vector<int> > triplet (3, std::vector<int> (data.ncol()));
-  
-  // probably will be refactored out at some point
-  prior_combos = convert2Set(prev_combos);
 
-  for (int i = 0; i < edges.nrow(); i++) {
+  int ncol = (*data)[0].size();
+  int num_starting_mvecs = mvecs->size();
+
+  std::vector<std::vector<int> > new_mvecs;
+  std::vector<std::vector<int> > triplet (3, std::vector<int> (ncol));
+  
+  std::vector<int> costs, new_costs;
+  
+  for (int i = 0; i < edges->size(); i++) {
     if (feasible[i]) {
-      v0.push_back(edges(i,0));
-      v1.push_back(edges(i,1));
+      v0.push_back((*edges)[i][0]);
+      v1.push_back((*edges)[i][1]);
     }
   }
   
   combos = allPairs(v0.size());
-  if (prior_combos.size() > 0) {
-    for (it=combos.begin(); it!=combos.end(); ++it) {
-      pit = prior_combos.find(*it);
-      if (pit!=prior_combos.end()) {
-        combos.erase(*it);
+  if (prior_combos->size() > 0) {
+    for (cit=combos.begin(); cit!=combos.end(); ++cit) {
+      pit = prior_combos->find(*cit);
+      if (pit!=prior_combos->end()) {
+        combos.erase(*cit);
       }
     }
   }
   
-  for (it=combos.begin(); it!=combos.end(); ++it) {
+  for (cit=combos.begin(); cit!=combos.end(); ++cit) {
     v_set.clear();
-    v_set.insert(v0[it->first]);
-    v_set.insert(v0[it->second]);
-    v_set.insert(v1[it->first]);
-    v_set.insert(v1[it->second]);
+    v_set.insert(v0[cit->first]);
+    v_set.insert(v0[cit->second]);
+    v_set.insert(v1[cit->first]);
+    v_set.insert(v1[cit->second]);
     if (v_set.size() == 3) {
       row = 0;
       for (v_it=v_set.begin(); v_it!=v_set.end(); ++v_it) {
-        for (int j = 0; j < data.ncol(); j++) {
-          triplet[row][j] = data(*v_it,j);
+        for (int j = 0; j < ncol; j++) {
+          triplet[row][j] = (*data)[*v_it][j];
         }
         row++;
       }
-      mvecs = medianVectors(triplet);
-      toerase.clear();
-      for (int k = 0; k < mvecs.size(); k++) {
-        for (int i = 0; i < data.nrow(); i++) {
-          all_equal = true;
-          for (int j = 0; j < data.ncol(); j++) {
-            all_equal = all_equal && data(i,j) == mvecs[k][j];
-          }
-          if (all_equal) {
-            toerase.insert(k);
-          }
-        }
-      }
-      for (std::set<int>::iterator it=toerase.begin(); it!=toerase.end(); ++it) {
-        mvecs.erase(mvecs.begin()+(*it));
-      }
-//      for (std::vector<std::vector<int> >::iterator mit=mvecs.begin(); mit!=mvecs.end(); ++mit) {
-//        for (std::vector<int>::iterator rit=mit->begin(); rit!=mit->end(); ++rit) {
-//          std::cout << *rit << " ";
-//        }
-//        std::cout << std::endl;
-//      }
-      ### at line 124 in mjn.R
+      new_mvecs = medianVectors(triplet);
+      eraseDuplicates(&new_mvecs, data);
+      eraseDuplicates(&new_mvecs, mvecs);
+      new_costs = calcConnectionCosts(triplet, new_mvecs);
+      costs.insert(costs.end(), new_costs.begin(), new_costs.end());
+      mvecs->insert(mvecs->end(), new_mvecs.begin(), new_mvecs.end());
     }
   }
   
-  returnList["v0"] = v0;
-  returnList["v1"] = v1;
-  return returnList;
+  if (costs.size() > 0) {
+    if (*lambda < 0) {
+      *lambda = *std::min_element(costs.begin(), costs.end());
+      for (int i = 0; i < costs.size(); i++) {
+        if (costs[i] > (*lambda + epsilon)) {
+          toerase.insert(i);
+        }
+      }
+    }
+  }
+
+  for (std::set<int>::iterator it=toerase.begin(); it!=toerase.end(); ++it) {
+    mvecs->erase(mvecs->begin()+(*it));
+  }  
+  
+  for (cit=combos.begin(); cit!=combos.end(); ++cit) {
+    prior_combos->insert(*cit);
+  }  
+  
+  return mvecs->size() - num_starting_mvecs;
 }
 
-// [[Rcpp::export]]
-List deltaStepComponents (IntegerMatrix edges, IntegerVector deltas, int epsilon) 
+std::vector<bool> deltaStepComponents (std::vector<std::vector<int> > *edges,
+                                       std::vector<int> *deltas,
+                                       std::set<int> *unique_deltas,
+                                       int epsilon) 
 {
-  List returnList;
   igraph_bool_t isconnected;
   int delta, deltaplus;
-  
-  std::vector<bool> feasible (edges.nrow(), false);
+
+  std::vector<bool> feasible (edges->size(), false);
   
   igraph_t g;
-  igraph_empty(&g, nnodes(edges), 0);
+  igraph_empty(&g, nNodes(edges), 0);
   
   igraph_vector_t weights;
   igraph_vector_init(&weights, 0);
-    
-  std::set<int> udeltas (deltas.begin(), deltas.end());                         
   
-  for (std::set<int>::iterator it=udeltas.begin(); it!=udeltas.end(); ++it) {
+  for (std::set<int>::iterator it=unique_deltas->begin(); it!=unique_deltas->end(); ++it) {
     delta = *it;
     addFeasibleEdges(edges, deltas, epsilon, delta, &g, &weights, &feasible);
     
@@ -320,20 +376,203 @@ List deltaStepComponents (IntegerMatrix edges, IntegerVector deltas, int epsilon
   }
   
   if (epsilon > 0) {
-    for (std::set<int>::iterator it=udeltas.begin(); it!=udeltas.end(); ++it) {
+    for (std::set<int>::iterator it=unique_deltas->begin(); it!=unique_deltas->end(); ++it) {
       deltaplus = *it;
       if ((deltaplus > delta) && (deltaplus <= (delta+epsilon))) {
         addFeasibleEdges(edges, deltas, epsilon, deltaplus, &g, &weights, &feasible);
       }
     }
   }
-  
+    
   igraph_vector_destroy(&weights);
   igraph_destroy(&g);
   
-  returnList["delta"] = delta;
-  returnList["feasible"] = feasible;
-  returnList["epsilon"] = epsilon;
-  return returnList;
+  return feasible;
+}
+
+std::set<int, std::greater<int> > identifyObsoletes (std::vector<std::vector<int> > *edges,
+                                                     std::vector<bool> *feasible,
+                                                     int num_sampled,
+                                                     int num_total)
+{
+  std::set<int, std::greater<int> > result;
+  std::map<int, int> count;
+  
+  for (int i = num_sampled; i < num_total; i++) {
+    count[i] = 0;
+  }
+  
+  for (int i = 0; i < feasible->size(); i++) {
+    if ((*feasible)[i]) {
+      if ((*edges)[i][0] >= num_sampled) {
+        count[(*edges)[i][0]]++;
+      }
+      if ((*edges)[i][1] >= num_sampled) {
+        count[(*edges)[i][1]]++;
+      }
+    }
+  }
+
+  for (int i = num_sampled; i < num_total; i++) {
+    if (count[i] <= 2) {
+      result.insert(i);
+    }
+  }
+
+  return result;
+}
+
+void mergeAndConvertData(std::vector<std::vector<int> > *alldata, 
+                         std::vector<std::vector<int> > *data, 
+                         std::vector<std::vector<int> > *mvecs, 
+                         std::vector<int> *deltas, 
+                         std::set<int> *unique_deltas,
+                         std::vector<std::vector<int> > *edges)
+{
+  std::vector<std::vector<int> > distances;
+
+  // -- first, merge sampled data with median vectors
+  alldata->clear();
+  for (std::vector<std::vector<int> >::iterator it=data->begin(); it!=data->end(); ++it) {
+    alldata->push_back(*it);
+  }
+  for (std::vector<std::vector<int> >::iterator it=mvecs->begin(); it!=mvecs->end(); ++it) {
+    alldata->push_back(*it);
+  }
+  // printDataVectors(*alldata);
+  // std::cout << std::endl;
+  
+  // Step 1: Determine the distance matrix for the current
+  // sequence types, pool identical sequence types, and order
+  // the different distance values as d1 < d2 < ... < dk.
+
+  // (a) determine distance matrix
+  distances = manDist(alldata);
+  
+  // (b) identical sequence types already pooled (in R)
+  
+  // -- convert distances matrix to edge list and deltas vector
+  deltas->clear();
+  edges->clear();
+  for (int i = 0; i < (distances.size() - 1); i++) {
+    for (int j = i+1; j < distances.size(); j++) {
+      deltas->push_back(distances[i][j]);
+      std::vector<int> edge;
+      edge.push_back(i);
+      edge.push_back(j);
+      edges->push_back(edge);
+    } 
+  }
+  
+  // (c) order unique distance values
+  unique_deltas->clear();
+  for (std::vector<int>::iterator it=deltas->begin(); it!=deltas->end(); ++it) {
+    unique_deltas->insert(*it);
+  }
+}
+
+void mjnC (std::vector<std::vector<int> > *data, 
+           std::vector<std::vector<int> > *edgeList, 
+           std::vector<int> *edgeLengths, 
+           int epsilon)
+{
+  std::vector<std::vector<int> > alldata;
+  std::vector<std::vector<int> > edges; 
+  std::vector<int> deltas; 
+  std::set<int> unique_deltas;
+  std::vector<bool> feasible;
+  std::vector<std::vector<int> > mvecs;
+  std::set<int, std::greater<int> > obsolete_mvecs;
+  std::set<Combination> prior_combos;
+  
+  int num_sampled = data->size();
+  int num_new_mvecs = 1;
+  int num_obsolete;
+  int lambda = -1;
+  
+  // ALGORITHM from Bandelt et al. 1999, pgs 39-40
+  
+  // PHASE I: Successive selection of median vectors
+    
+  while (num_new_mvecs > 0) {
+    
+    // Step 1
+    mergeAndConvertData(&alldata, data, &mvecs, &deltas, &unique_deltas, &edges);
+  
+    num_obsolete = 1; // make sure to go through at least once each round
+    while (num_obsolete > 0) {
+      // Step 2: Determine the links between sequence types
+      // which describe the (epsilon-relaxed) minimum spanning
+      // network.
+      feasible = deltaStepComponents(&edges, &deltas, &unique_deltas, epsilon);
+  
+      // Step 3: Iteratively remove from the set of current
+      // sequence types those (obsolete) sequence types which are
+      // not among the sampled sequences but are feasibly linked
+      // to at most two current sequence types. If obsolete types
+      // were detected, go back to step 2.
+      obsolete_mvecs = identifyObsoletes(&edges, &feasible, num_sampled, alldata.size());
+      for (std::set<int, std::greater<int> >::iterator it=obsolete_mvecs.begin(); it!=obsolete_mvecs.end(); ++it) {
+        mvecs.erase(mvecs.begin()+(*it-num_sampled));
+      }
+      num_obsolete = obsolete_mvecs.size();
+      // std::cout << "nobs: " << num_obsolete << std::endl;
+    } 
+    // Step 4: Generate median vectors
+    num_new_mvecs = newSequenceTypes (&alldata, &edges, feasible, epsilon, &lambda,
+                                      &prior_combos, &mvecs); 
+    // std::cout << "nnew: " << num_new_mvecs << std::endl;
+  } // END PHASE I of ALGORITHM
+  
+  // PHASE II: Construction of the final network.
+  
+  // Step 5: Calculate the minimum spanning network for
+  // the new set of current sequence types. 
+  num_obsolete = 1;
+  while (num_obsolete > 0) {
+    mergeAndConvertData(&alldata, data, &mvecs, &deltas, &unique_deltas, &edges);
+    // identify feasible connections for epsilon = 0
+    feasible = deltaStepComponents(&edges, &deltas, &unique_deltas, 0);
+    obsolete_mvecs = identifyObsoletes(&edges, &feasible, num_sampled, alldata.size());
+    for (std::set<int, std::greater<int> >::iterator it=obsolete_mvecs.begin(); it!=obsolete_mvecs.end(); ++it) {
+      mvecs.erase(mvecs.begin()+(*it-num_sampled));
+    }
+    num_obsolete = obsolete_mvecs.size();
+  }
+  
+  for (int i = 0; i < feasible.size(); i++) {
+    if (feasible[i]) {
+      edgeList->push_back(edges[i]);
+      edgeLengths->push_back(deltas[i]);
+    }
+  }
+}
+
+// [[Rcpp::export]]
+List mjnRcpp (IntegerMatrix dataR, int epsilon)
+{
+  List resultList;
+  
+  std::vector<std::vector<int> > edgeList; 
+  std::vector<int> edgeLengths;
+  
+  std::vector<std::vector<int> > data;
+  data = convert2Matrix(&dataR);
+  
+  mjnC(&data, &edgeList, &edgeLengths, epsilon);
+
+  IntegerMatrix eList (edgeList.size(), 2);
+  IntegerVector eLengths (edgeLengths.size());
+  
+  for (int i = 0; i < edgeList.size(); i++) {
+    eLengths[i] = edgeLengths[i];
+    for (int j = 0; j < 2; j++) {
+      eList(i,j) = edgeList[i][j];
+    }
+  }
+
+  resultList["edgeList"] = eList;
+  resultList["edgeLengths"] = eLengths;
+  return resultList;
 }
   

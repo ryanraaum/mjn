@@ -14,6 +14,9 @@ M2deltas <- M2edges[,3]
 M2es <- M2edges[,1:2] - 1
 colnames(M2edges) <- c('n1', 'n2', 'd')
 
+# Data from bandelt et al tables
+T1 <- as.matrix(data.frame(a=c(0,1,1,0), b=c(0,3,0,3), c=c(0,0,2,2), d=c(0,0,1,0), e=c(0,0,0,2)))
+
 
 LABS = c(LETTERS[1:4], LETTERS[21:26])
 
