@@ -1,7 +1,8 @@
 #include "mjn.hpp"
 
 
-void printDataVectors (std::vector<std::vector<int> > x)
+void 
+printDataVectors (std::vector<std::vector<int> > x)
 {
   for (std::vector<std::vector<int> >::iterator xit=x.begin(); xit!=x.end(); ++xit) {
     for (std::vector<int>::iterator yit=xit->begin(); yit!=xit->end(); ++yit) {
@@ -11,7 +12,8 @@ void printDataVectors (std::vector<std::vector<int> > x)
   }  
 }
 
-void printCombos (std::set<Combination> combos)
+void 
+printCombos (std::set<Combination> combos)
 {
   std::set<Combination>::iterator cit;
   
@@ -21,7 +23,8 @@ void printCombos (std::set<Combination> combos)
 }
 
 
-void printIntVector (std::vector<int> x)
+void 
+printIntVector (std::vector<int> x)
 {
   for (std::vector<int>::iterator it=x.begin(); it!=x.end(); ++it) {
     std::cout << *it << " ";
@@ -30,7 +33,8 @@ void printIntVector (std::vector<int> x)
 }
 
 
-std::vector<std::vector<int> > manDist(std::vector<std::vector<int> > *x) 
+std::vector<std::vector<int> > 
+manDist(std::vector<std::vector<int> > *x) 
 {
     int sum;
     int nrows = x->size();
@@ -50,11 +54,36 @@ std::vector<std::vector<int> > manDist(std::vector<std::vector<int> > *x)
     return D;
 }
 
-std::vector<bool> connected (std::vector<std::vector<int> > *edges, 
-                             igraph_t *g, 
-                             igraph_vector_t *weights, 
-                             int delta, 
-                             int epsilon) 
+std::vector<std::vector<int> > 
+hammingDist(std::vector<std::vector<int> > *x, std::vector<int> *w) 
+{
+    int sum;
+    int nrows = x->size();
+    int ncols = (*x)[0].size();
+    std::vector<std::vector<int> > D (nrows, std::vector<int> (nrows));
+    
+    for (int i = 0; i < (nrows-1); i++) {
+      for (int j = i + 1; j < nrows; j++) {
+        sum = 0;
+        for (int k = 0; k < ncols; k++) {
+          if ((*x)[i][k] != (*x)[j][k]) {
+            sum = sum + (*w)[k];
+          }
+        }
+        D[i][j] = sum;
+        D[j][i] = sum;
+      }
+    }
+    return D;
+}
+
+
+std::vector<bool> 
+connected (std::vector<std::vector<int> > *edges, 
+           igraph_t *g, 
+           igraph_vector_t *weights, 
+           int delta, 
+           int epsilon) 
 {
   std::vector<bool> result (edges->size(), false);
   igraph_bool_t areconnected;
@@ -90,7 +119,8 @@ std::vector<bool> connected (std::vector<std::vector<int> > *edges,
   return result;
 }
 
-int nNodes (std::vector<std::vector<int> > *edges) 
+int 
+nNodes (std::vector<std::vector<int> > *edges) 
 {
   std::vector<int> all_nodes;
   for (int i=0; i < edges->size(); i++) {
@@ -102,13 +132,14 @@ int nNodes (std::vector<std::vector<int> > *edges)
   return unodes.size();  
 }
 
-void addFeasibleEdges (std::vector<std::vector<int> > *edges, 
-                       std::vector<int> *deltas, 
-                       int epsilon, 
-                       int delta,
-                       igraph_t *g, 
-                       igraph_vector_t *weights, 
-                       std::vector<bool> *feasible) 
+void 
+addFeasibleEdges (std::vector<std::vector<int> > *edges, 
+                  std::vector<int> *deltas, 
+                  int epsilon, 
+                  int delta,
+                  igraph_t *g, 
+                  igraph_vector_t *weights, 
+                  std::vector<bool> *feasible) 
 {
   std::vector<bool> already_connected;
   std::vector<bool> newly_feasible (deltas->size(), false);
@@ -116,7 +147,7 @@ void addFeasibleEdges (std::vector<std::vector<int> > *edges,
     
   already_connected = connected(edges, g, weights, delta, epsilon);
   for (int i = 0; i < edges->size(); i++) {
-    if (((*deltas)[i] <= delta) && !(already_connected[i]) && !((*feasible)[i])) {
+    if ((((*deltas)[i] - epsilon) <= delta) && !(already_connected[i]) && !((*feasible)[i])) {
       newly_feasible[i] = true;
       (*feasible)[i] = true;
     }
@@ -133,7 +164,8 @@ void addFeasibleEdges (std::vector<std::vector<int> > *edges,
   }
 }
 
-std::set<Combination> allPairs (int n)
+std::set<Combination>
+allPairs (int n)
 {
   std::set<Combination> combos;
   for (int i = 0; i < (n-1); i++) {
@@ -144,7 +176,8 @@ std::set<Combination> allPairs (int n)
   return combos;
 }
 
-std::vector<std::vector<int> > medianVectors(std::vector<std::vector<int> > triplet) 
+std::vector<std::vector<int> > 
+medianVectors(std::vector<std::vector<int> > triplet) 
 {
   if (triplet.size() != 3) { throw(Rcpp::exception("triplet does not have 3 rows.")); }
   int ncols = triplet[0].size();
@@ -208,8 +241,9 @@ std::vector<std::vector<int> > medianVectors(std::vector<std::vector<int> > trip
 }
 
 
-void eraseDuplicates (std::vector<std::vector<int> > *new_vectors, 
-                      std::vector<std::vector<int> > *existing) 
+void 
+eraseDuplicates (std::vector<std::vector<int> > *new_vectors, 
+                 std::vector<std::vector<int> > *existing) 
 {
   bool all_equal;
   std::set<int, std::greater<int> > toerase;
@@ -230,8 +264,10 @@ void eraseDuplicates (std::vector<std::vector<int> > *new_vectors,
   }                        
 }
 
-std::vector<int> calcConnectionCosts(std::vector<std::vector<int> > triplet, 
-                                     std::vector<std::vector<int> > new_vectors)
+std::vector<int> 
+calcConnectionCosts(std::vector<std::vector<int> > triplet, 
+                    std::vector<std::vector<int> > new_vectors,
+                    std::vector<int> *character_weights)
 {
   int cost;
   std::vector<int> result;
@@ -243,7 +279,9 @@ std::vector<int> calcConnectionCosts(std::vector<std::vector<int> > triplet,
     for (std::vector<std::vector<int> >::iterator tit=triplet.begin(); tit!=triplet.end(); ++tit) {
       // iterate through columns of both triplets and new_vectors
       for (int i = 0; i < tit->size(); i++) {
-        cost = cost + abs((*tit)[i] - (*xit)[i]);
+        if ((*tit)[i] != (*xit)[i]) {
+          cost = cost + (*character_weights)[i];
+        }
       }
     }
     result.push_back(cost);
@@ -252,7 +290,8 @@ std::vector<int> calcConnectionCosts(std::vector<std::vector<int> > triplet,
   return result;
 }
 
-std::vector<std::vector<int> > convert2Matrix (IntegerMatrix *x) 
+std::vector<std::vector<int> > 
+convert2Matrix (IntegerMatrix *x) 
 {
   std::vector<std::vector<int> > y (x->nrow(), std::vector<int> (x->ncol()));
   
@@ -265,19 +304,34 @@ std::vector<std::vector<int> > convert2Matrix (IntegerMatrix *x)
   return y;
 }
 
-int newSequenceTypes (std::vector<std::vector<int> > *data,
+std::vector<int> 
+convert2Vector (IntegerVector *x)
+{
+  std::vector<int> y (x->size());
+  
+  for (int i = 0; i < x->size(); i++) {
+    y[i] = (*x)[i];
+  }
+  
+  return y;
+}
+
+int 
+newSequenceTypes (std::vector<std::vector<int> > *data,
+                  std::vector<int> *character_weights,
                   std::vector<std::vector<int> > *edges,
                   std::vector<bool> feasible,
                   int epsilon,
-                  int *lambda,
-                  std::set<Combination> *prior_combos,
                   std::vector<std::vector<int> > *mvecs)
 {
   int row;
+  int lambda;
   std::vector<int> v0, v1;
   std::set<Combination> combos;
   std::set<Combination>::iterator cit, pit;
   std::set<int> v_set;
+  std::set<std::set<int> > seen_combos;
+  std::pair<std::set<std::set<int> >::iterator, bool> ret;
   std::set<int>::iterator v_it;
   std::set<int, std::greater<int> > toerase;
 
@@ -297,14 +351,6 @@ int newSequenceTypes (std::vector<std::vector<int> > *data,
   }
   
   combos = allPairs(v0.size());
-  if (prior_combos->size() > 0) {
-    for (cit=combos.begin(); cit!=combos.end(); ++cit) {
-      pit = prior_combos->find(*cit);
-      if (pit!=prior_combos->end()) {
-        combos.erase(*cit);
-      }
-    }
-  }
   
   for (cit=combos.begin(); cit!=combos.end(); ++cit) {
     v_set.clear();
@@ -312,7 +358,8 @@ int newSequenceTypes (std::vector<std::vector<int> > *data,
     v_set.insert(v0[cit->second]);
     v_set.insert(v1[cit->first]);
     v_set.insert(v1[cit->second]);
-    if (v_set.size() == 3) {
+    ret = seen_combos.insert(v_set);
+    if (v_set.size() == 3 && ret.second == true) {
       row = 0;
       for (v_it=v_set.begin(); v_it!=v_set.end(); ++v_it) {
         for (int j = 0; j < ncol; j++) {
@@ -323,19 +370,17 @@ int newSequenceTypes (std::vector<std::vector<int> > *data,
       new_mvecs = medianVectors(triplet);
       eraseDuplicates(&new_mvecs, data);
       eraseDuplicates(&new_mvecs, mvecs);
-      new_costs = calcConnectionCosts(triplet, new_mvecs);
+      new_costs = calcConnectionCosts(triplet, new_mvecs, character_weights);
       costs.insert(costs.end(), new_costs.begin(), new_costs.end());
       mvecs->insert(mvecs->end(), new_mvecs.begin(), new_mvecs.end());
     }
   }
   
   if (costs.size() > 0) {
-    if (*lambda < 0) {
-      *lambda = *std::min_element(costs.begin(), costs.end());
-      for (int i = 0; i < costs.size(); i++) {
-        if (costs[i] > (*lambda + epsilon)) {
-          toerase.insert(i);
-        }
+    lambda = *std::min_element(costs.begin(), costs.end());
+    for (int i = 0; i < costs.size(); i++) {
+      if (costs[i] > (lambda + epsilon)) {
+        toerase.insert(i);
       }
     }
   }
@@ -344,17 +389,14 @@ int newSequenceTypes (std::vector<std::vector<int> > *data,
     mvecs->erase(mvecs->begin()+(*it));
   }  
   
-  for (cit=combos.begin(); cit!=combos.end(); ++cit) {
-    prior_combos->insert(*cit);
-  }  
-  
   return mvecs->size() - num_starting_mvecs;
 }
 
-std::vector<bool> deltaStepComponents (std::vector<std::vector<int> > *edges,
-                                       std::vector<int> *deltas,
-                                       std::set<int> *unique_deltas,
-                                       int epsilon) 
+std::vector<bool> 
+deltaStepComponents (std::vector<std::vector<int> > *edges,
+                     std::vector<int> *deltas,
+                     std::set<int> *unique_deltas,
+                     int epsilon) 
 {
   igraph_bool_t isconnected;
   int delta, deltaplus;
@@ -390,10 +432,11 @@ std::vector<bool> deltaStepComponents (std::vector<std::vector<int> > *edges,
   return feasible;
 }
 
-std::set<int, std::greater<int> > identifyObsoletes (std::vector<std::vector<int> > *edges,
-                                                     std::vector<bool> *feasible,
-                                                     int num_sampled,
-                                                     int num_total)
+std::set<int, std::greater<int> > 
+identifyObsoletes (std::vector<std::vector<int> > *edges,
+                   std::vector<bool> *feasible,
+                   int num_sampled,
+                   int num_total)
 {
   std::set<int, std::greater<int> > result;
   std::map<int, int> count;
@@ -422,12 +465,14 @@ std::set<int, std::greater<int> > identifyObsoletes (std::vector<std::vector<int
   return result;
 }
 
-void mergeAndConvertData(std::vector<std::vector<int> > *alldata, 
-                         std::vector<std::vector<int> > *data, 
-                         std::vector<std::vector<int> > *mvecs, 
-                         std::vector<int> *deltas, 
-                         std::set<int> *unique_deltas,
-                         std::vector<std::vector<int> > *edges)
+void 
+mergeAndConvertData(std::vector<std::vector<int> > *alldata, 
+                    std::vector<std::vector<int> > *data, 
+                    std::vector<int> *character_weights,
+                    std::vector<std::vector<int> > *mvecs, 
+                    std::vector<int> *deltas, 
+                    std::set<int> *unique_deltas,
+                    std::vector<std::vector<int> > *edges)
 {
   std::vector<std::vector<int> > distances;
 
@@ -447,7 +492,7 @@ void mergeAndConvertData(std::vector<std::vector<int> > *alldata,
   // the different distance values as d1 < d2 < ... < dk.
 
   // (a) determine distance matrix
-  distances = manDist(alldata);
+  distances = hammingDist(alldata, character_weights);
   
   // (b) identical sequence types already pooled (in R)
   
@@ -471,10 +516,12 @@ void mergeAndConvertData(std::vector<std::vector<int> > *alldata,
   }
 }
 
-void mjnC (std::vector<std::vector<int> > *data, 
-           std::vector<std::vector<int> > *edgeList, 
-           std::vector<int> *edgeLengths, 
-           int epsilon)
+void 
+mjnC (std::vector<std::vector<int> > *data, 
+      std::vector<int> *character_weights,
+      std::vector<std::vector<int> > *edgeList, 
+      std::vector<int> *edgeLengths, 
+      int epsilon)
 {
   std::vector<std::vector<int> > alldata;
   std::vector<std::vector<int> > edges; 
@@ -483,12 +530,10 @@ void mjnC (std::vector<std::vector<int> > *data,
   std::vector<bool> feasible;
   std::vector<std::vector<int> > mvecs;
   std::set<int, std::greater<int> > obsolete_mvecs;
-  std::set<Combination> prior_combos;
   
   int num_sampled = data->size();
   int num_new_mvecs = 1;
   int num_obsolete;
-  int lambda = -1;
   
   // ALGORITHM from Bandelt et al. 1999, pgs 39-40
   
@@ -497,7 +542,7 @@ void mjnC (std::vector<std::vector<int> > *data,
   while (num_new_mvecs > 0) {
     
     // Step 1
-    mergeAndConvertData(&alldata, data, &mvecs, &deltas, &unique_deltas, &edges);
+    mergeAndConvertData(&alldata, data, character_weights, &mvecs, &deltas, &unique_deltas, &edges);
   
     num_obsolete = 1; // make sure to go through at least once each round
     while (num_obsolete > 0) {
@@ -519,8 +564,8 @@ void mjnC (std::vector<std::vector<int> > *data,
       // std::cout << "nobs: " << num_obsolete << std::endl;
     } 
     // Step 4: Generate median vectors
-    num_new_mvecs = newSequenceTypes (&alldata, &edges, feasible, epsilon, &lambda,
-                                      &prior_combos, &mvecs); 
+    num_new_mvecs = newSequenceTypes (&alldata, character_weights, &edges, feasible, epsilon,
+                                      &mvecs); 
     // std::cout << "nnew: " << num_new_mvecs << std::endl;
   } // END PHASE I of ALGORITHM
   
@@ -530,7 +575,7 @@ void mjnC (std::vector<std::vector<int> > *data,
   // the new set of current sequence types. 
   num_obsolete = 1;
   while (num_obsolete > 0) {
-    mergeAndConvertData(&alldata, data, &mvecs, &deltas, &unique_deltas, &edges);
+    mergeAndConvertData(&alldata, data, character_weights, &mvecs, &deltas, &unique_deltas, &edges);
     // identify feasible connections for epsilon = 0
     feasible = deltaStepComponents(&edges, &deltas, &unique_deltas, 0);
     obsolete_mvecs = identifyObsoletes(&edges, &feasible, num_sampled, alldata.size());
@@ -549,7 +594,8 @@ void mjnC (std::vector<std::vector<int> > *data,
 }
 
 // [[Rcpp::export]]
-List mjnRcpp (IntegerMatrix dataR, int epsilon)
+List 
+mjnRcpp (IntegerMatrix dataR, IntegerVector characterWeights, int epsilon)
 {
   List resultList;
   
@@ -559,7 +605,10 @@ List mjnRcpp (IntegerMatrix dataR, int epsilon)
   std::vector<std::vector<int> > data;
   data = convert2Matrix(&dataR);
   
-  mjnC(&data, &edgeList, &edgeLengths, epsilon);
+  std::vector<int> character_weights;
+  character_weights = convert2Vector(&characterWeights);
+  
+  mjnC(&data, &character_weights, &edgeList, &edgeLengths, epsilon);
 
   IntegerMatrix eList (edgeList.size(), 2);
   IntegerVector eLengths (edgeLengths.size());

@@ -21,9 +21,11 @@ int nNodes (std::vector<std::vector<int> > *edges);
 
 // R to C++ helper
 std::vector<std::vector<int> > convert2Matrix (IntegerMatrix *x);
+std::vector<int> convert2Vector (IntegerVector *x);
 
 // core functionality
 std::vector<std::vector<int> > manDist(std::vector<std::vector<int> > *x);
+std::vector<std::vector<int> > hammingDist(std::vector<std::vector<int> > *x, std::vector<int> *w);
 
 std::vector<bool> connected (std::vector<std::vector<int> > *edges, 
                              igraph_t *g, igraph_vector_t *weights, 
@@ -40,14 +42,14 @@ void eraseDuplicates (std::vector<std::vector<int> > *new_vectors,
                       std::vector<std::vector<int> > *existing);
 
 std::vector<int> calcConnectionCosts(std::vector<std::vector<int> > triplet, 
-                                     std::vector<std::vector<int> > new_vectors);
+                                     std::vector<std::vector<int> > new_vectors,
+                                     std::vector<int> *character_weights);
 
 int newSequenceTypes (std::vector<std::vector<int> > *data,
+                  std::vector<int> *character_weights,
                   std::vector<std::vector<int> > *edges,
                   std::vector<bool> feasible,
                   int epsilon,
-                  int *lambda,
-                  std::set<Combination> *prior_combos,
                   std::vector<std::vector<int> > *mvecs);
                   
 std::vector<bool> deltaStepComponents (std::vector<std::vector<int> > *edges,
@@ -67,12 +69,13 @@ void mergeAndConvertData(std::vector<std::vector<int> > *alldata,
                          std::set<int> *unique_deltas,
                          std::vector<std::vector<int> > *edges);
                          
-void mjnC (std::vector<std::vector<int> > *data, 
+void mjnC (std::vector<std::vector<int> > *data,
+           std::vector<int> *character_weights,
            std::vector<std::vector<int> > *edgeList, 
            std::vector<int> *edgeLengths, 
            int epsilon);
            
 // interface exported to R
-List mjnRcpp (IntegerMatrix dataR, int epsilon);
+List mjnRcpp (IntegerMatrix dataR, IntegerVector charWeights, int epsilon);
 
 #endif

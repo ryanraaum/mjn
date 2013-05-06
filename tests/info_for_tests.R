@@ -15,7 +15,11 @@ M2es <- M2edges[,1:2] - 1
 colnames(M2edges) <- c('n1', 'n2', 'd')
 
 # Data from bandelt et al tables
-T1 <- as.matrix(data.frame(a=c(0,1,1,0), b=c(0,3,0,3), c=c(0,0,2,2), d=c(0,0,1,0), e=c(0,0,0,2)))
+T1 <- as.matrix(data.frame(a=c(0,1,1,0), b=c(0,1,0,1), c=c(0,0,1,1), d=c(0,0,1,0), e=c(0,0,0,1)))
+T1W <- c(1,3,2,1,2)
+T2 <- as.matrix(data.frame(a=c(1,0,0,0,0,0), b=c(0,1,0,0,0,0), c=c(0,0,1,0,0,0), d=c(0,0,0,1,0,0), 
+                           e=c(0,0,0,0,0,1), f=c(0,0,0,0,1,1), g=c(0,0,1,1,2,0)))
+T2W <- c(1,2,1,2,2,2,2)
 
 
 LABS = c(LETTERS[1:4], LETTERS[21:26])
