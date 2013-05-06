@@ -22,6 +22,13 @@ T2 <- as.matrix(data.frame(a=c(1,0,0,0,0,0), b=c(0,1,0,0,0,0), c=c(0,0,1,0,0,0),
 T2W <- c(1,2,1,2,2,2,2)
 
 
+# y str file
+workdir <- '~/Dropbox/Projects/2013_Swahili_Y-STRs/02_networks'
+haplotypes_file <- paste(workdir, 'results', 'haplotypes_table.csv', sep='/')
+haplotypes <- read.csv(haplotypes_file, row.names=1)
+mat = as.matrix(haplotypes[haplotypes$haplogroup=='J-M267',4:23])
+mp = processYSTRs(mat)
+
 LABS = c(LETTERS[1:4], LETTERS[21:26])
 
 x <- mjn(M,2)
