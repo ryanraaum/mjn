@@ -1,5 +1,7 @@
 #include "mjn.hpp"
+// #include <ctime>
 
+// time_t starttime, endtime;
 
 void 
 printDataVectors (std::vector<std::vector<int> > x)
@@ -78,14 +80,16 @@ hammingDist(std::vector<std::vector<int> > *x, std::vector<int> *w)
 }
 
 
-std::vector<bool> 
+void 
 connected (std::vector<std::vector<int> > *edges, 
+           std::vector<int> *deltas,
            igraph_t *g, 
            igraph_vector_t *weights, 
            int delta, 
-           int epsilon) 
+           int epsilon,
+           std::vector<bool> *already_connected) 
 {
-  std::vector<bool> result (edges->size(), false);
+  // std::vector<bool> result (edges->size(), false);
   igraph_bool_t areconnected;
   igraph_vector_t epath, vpath;
   int nedges;
@@ -93,30 +97,33 @@ connected (std::vector<std::vector<int> > *edges,
   long int numedges;
   bool all_less;
   
+  //std::cout << "number of edges: " << edges->size() << std::endl;
   for (int i = 0; i < edges->size(); i++) {
-    igraph_st_edge_connectivity(g, &nedges, (*edges)[i][0], (*edges)[i][1]);
-    igraph_are_connected(g, (*edges)[i][0], (*edges)[i][1], &areconnected);
-    
-    if (nedges == 0) {
-      result[i] = false;
-    } else if ((nedges > 0) && areconnected) {
-      result[i] = true;
-    } else if (nedges > 0) {
-      igraph_vector_init(&vpath, 0);
-      igraph_vector_init(&epath, 0);
-      igraph_get_shortest_path_dijkstra(g, &vpath, &epath, (*edges)[i][0], (*edges)[i][1], weights, IGRAPH_ALL);
-      numedges = igraph_vector_size(&epath);
-      all_less = true;
-      for (int k = 0; k < numedges; k++) {
-        eindex = VECTOR(epath)[k];
-        all_less = all_less && (VECTOR(*weights)[eindex] < (delta - epsilon));
+    if ((((*deltas)[i] - epsilon) <= delta) && !(*already_connected)[i]) {
+      igraph_st_edge_connectivity(g, &nedges, (*edges)[i][0], (*edges)[i][1]);
+      igraph_are_connected(g, (*edges)[i][0], (*edges)[i][1], &areconnected);
+      
+      if (nedges == 0) {
+        (*already_connected)[i] = false;
+      } else if ((nedges > 0) && areconnected) {
+        (*already_connected)[i] = true;
+      } else if (nedges > 0) {
+        igraph_vector_init(&vpath, 0);
+        igraph_vector_init(&epath, 0);
+        igraph_get_shortest_path_dijkstra(g, &vpath, &epath, (*edges)[i][0], (*edges)[i][1], weights, IGRAPH_ALL);
+        numedges = igraph_vector_size(&epath);
+        all_less = true;
+        for (int k = 0; k < numedges; k++) {
+          eindex = VECTOR(epath)[k];
+          all_less = all_less && (VECTOR(*weights)[eindex] < (delta - epsilon));
+        }
+        (*already_connected)[i] = all_less;
+        igraph_vector_destroy(&epath);
+        igraph_vector_destroy(&vpath);
       }
-      result[i] = all_less;
-      igraph_vector_destroy(&epath);
-      igraph_vector_destroy(&vpath);
     }
   }
-  return result;
+  // return result;
 }
 
 int 
@@ -139,20 +146,24 @@ addFeasibleEdges (std::vector<std::vector<int> > *edges,
                   int delta,
                   igraph_t *g, 
                   igraph_vector_t *weights, 
-                  std::vector<bool> *feasible) 
+                  std::vector<bool> *feasible,
+                  std::vector<bool> *already_connected) 
 {
-  std::vector<bool> already_connected;
   std::vector<bool> newly_feasible (deltas->size(), false);
   int num_newfeasible;
-    
-  already_connected = connected(edges, g, weights, delta, epsilon);
+  
+  //time(&starttime);
+  connected(edges, deltas, g, weights, delta, epsilon, already_connected);
+  //time(&endtime);
+  //std::cout << "time taken in connected: " << endtime-starttime << std::endl;
+
   for (int i = 0; i < edges->size(); i++) {
-    if ((((*deltas)[i] - epsilon) <= delta) && !(already_connected[i]) && !((*feasible)[i])) {
+    if ((((*deltas)[i] - epsilon) <= delta) && !((*already_connected)[i]) && !((*feasible)[i])) {
       newly_feasible[i] = true;
       (*feasible)[i] = true;
     }
   }
-    
+
   num_newfeasible = std::count(newly_feasible.begin(), newly_feasible.end(), true);
   if (num_newfeasible > 0) {
     for (int i = 0; i < edges->size(); i++) {
@@ -359,7 +370,7 @@ newSequenceTypes (std::vector<std::vector<int> > *data,
     v_set.insert(v1[cit->first]);
     v_set.insert(v1[cit->second]);
     ret = seen_combos.insert(v_set);
-    if (v_set.size() == 3 && ret.second == true) {
+    if (ret.second == true && v_set.size() == 3) {
       row = 0;
       for (v_it=v_set.begin(); v_it!=v_set.end(); ++v_it) {
         for (int j = 0; j < ncol; j++) {
@@ -402,6 +413,7 @@ deltaStepComponents (std::vector<std::vector<int> > *edges,
   int delta, deltaplus;
 
   std::vector<bool> feasible (edges->size(), false);
+  std::vector<bool> already_connected (edges->size(), false);
   
   igraph_t g;
   igraph_empty(&g, nNodes(edges), 0);
@@ -411,7 +423,7 @@ deltaStepComponents (std::vector<std::vector<int> > *edges,
   
   for (std::set<int>::iterator it=unique_deltas->begin(); it!=unique_deltas->end(); ++it) {
     delta = *it;
-    addFeasibleEdges(edges, deltas, epsilon, delta, &g, &weights, &feasible);
+    addFeasibleEdges(edges, deltas, epsilon, delta, &g, &weights, &feasible, &already_connected);
     
     igraph_is_connected(&g, &isconnected, IGRAPH_WEAK);
     if (isconnected) { break; }
@@ -421,7 +433,7 @@ deltaStepComponents (std::vector<std::vector<int> > *edges,
     for (std::set<int>::iterator it=unique_deltas->begin(); it!=unique_deltas->end(); ++it) {
       deltaplus = *it;
       if ((deltaplus > delta) && (deltaplus <= (delta+epsilon))) {
-        addFeasibleEdges(edges, deltas, epsilon, deltaplus, &g, &weights, &feasible);
+        addFeasibleEdges(edges, deltas, epsilon, deltaplus, &g, &weights, &feasible, &already_connected);
       }
     }
   }
@@ -540,32 +552,25 @@ mjnC (std::vector<std::vector<int> > *data,
   // PHASE I: Successive selection of median vectors
     
   while (num_new_mvecs > 0) {
+
+    mergeAndConvertData(&alldata, data, character_weights, &mvecs, &deltas, 
+                        &unique_deltas, &edges);
     
-    // Step 1
-    mergeAndConvertData(&alldata, data, character_weights, &mvecs, &deltas, &unique_deltas, &edges);
-  
-    num_obsolete = 1; // make sure to go through at least once each round
-    while (num_obsolete > 0) {
-      // Step 2: Determine the links between sequence types
-      // which describe the (epsilon-relaxed) minimum spanning
-      // network.
-      feasible = deltaStepComponents(&edges, &deltas, &unique_deltas, epsilon);
-  
-      // Step 3: Iteratively remove from the set of current
-      // sequence types those (obsolete) sequence types which are
-      // not among the sampled sequences but are feasibly linked
-      // to at most two current sequence types. If obsolete types
-      // were detected, go back to step 2.
-      obsolete_mvecs = identifyObsoletes(&edges, &feasible, num_sampled, alldata.size());
-      for (std::set<int, std::greater<int> >::iterator it=obsolete_mvecs.begin(); it!=obsolete_mvecs.end(); ++it) {
-        mvecs.erase(mvecs.begin()+(*it-num_sampled));
-      }
-      num_obsolete = obsolete_mvecs.size();
-      // std::cout << "nobs: " << num_obsolete << std::endl;
-    } 
-    // Step 4: Generate median vectors
-    num_new_mvecs = newSequenceTypes (&alldata, character_weights, &edges, feasible, epsilon,
-                                      &mvecs); 
+    // Determine the links between sequence types
+    // which describe the (epsilon-relaxed) minimum spanning
+    // network.
+    //time(&starttime);
+    feasible = deltaStepComponents(&edges, &deltas, &unique_deltas, epsilon);
+    //time(&endtime);
+    //std::cout << "time taken in deltaStepComponents: " << endtime-starttime << std::endl;
+    
+    // Generate median vectors
+    //time(&starttime);
+    num_new_mvecs = newSequenceTypes (&alldata, character_weights, &edges, 
+                                      feasible, epsilon, &mvecs); 
+    //time(&endtime);
+    //std::cout << "time taken in newSequenceTypes: " << endtime-starttime << std::endl;
+    
     // std::cout << "nnew: " << num_new_mvecs << std::endl;
   } // END PHASE I of ALGORITHM
   
@@ -575,13 +580,13 @@ mjnC (std::vector<std::vector<int> > *data,
   // the new set of current sequence types. 
   num_obsolete = 1;
   while (num_obsolete > 0) {
-    mergeAndConvertData(&alldata, data, character_weights, &mvecs, &deltas, &unique_deltas, &edges);
     // identify feasible connections for epsilon = 0
     feasible = deltaStepComponents(&edges, &deltas, &unique_deltas, 0);
     obsolete_mvecs = identifyObsoletes(&edges, &feasible, num_sampled, alldata.size());
     for (std::set<int, std::greater<int> >::iterator it=obsolete_mvecs.begin(); it!=obsolete_mvecs.end(); ++it) {
-      mvecs.erase(mvecs.begin()+(*it-num_sampled));
+      mvecs.erase(mvecs.begin()+((*it)-num_sampled));
     }
+    mergeAndConvertData(&alldata, data, character_weights, &mvecs, &deltas, &unique_deltas, &edges);
     num_obsolete = obsolete_mvecs.size();
   }
   

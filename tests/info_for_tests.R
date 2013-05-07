@@ -26,8 +26,12 @@ T2W <- c(1,2,1,2,2,2,2)
 workdir <- '~/Dropbox/Projects/2013_Swahili_Y-STRs/02_networks'
 haplotypes_file <- paste(workdir, 'results', 'haplotypes_table.csv', sep='/')
 haplotypes <- read.csv(haplotypes_file, row.names=1)
-mat = as.matrix(haplotypes[haplotypes$haplogroup=='J-M267',4:23])
-mp = processYSTRs(mat)
+
+jm267 = processYSTRs(as.matrix(haplotypes[haplotypes$haplogroup=='J-M267',4:23]))
+jm172 = processYSTRs(as.matrix(haplotypes[haplotypes$haplogroup=='J-M172',4:23]))
+g = processYSTRs(as.matrix(haplotypes[haplotypes$haplogroup=='G',4:23]))
+e = processYSTRs(as.matrix(haplotypes[haplotypes$haplogroup=='E(xM78)',4:23]))
+
 
 LABS = c(LETTERS[1:4], LETTERS[21:26])
 

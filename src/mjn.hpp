@@ -27,9 +27,13 @@ std::vector<int> convert2Vector (IntegerVector *x);
 std::vector<std::vector<int> > manDist(std::vector<std::vector<int> > *x);
 std::vector<std::vector<int> > hammingDist(std::vector<std::vector<int> > *x, std::vector<int> *w);
 
-std::vector<bool> connected (std::vector<std::vector<int> > *edges, 
-                             igraph_t *g, igraph_vector_t *weights, 
-                             int delta, int epsilon);
+void 
+connected (std::vector<std::vector<int> > *edges, 
+           igraph_t *g, 
+           igraph_vector_t *weights, 
+           int delta, 
+           int epsilon,
+           std::vector<bool> *already_connected);
 
 void addFeasibleEdges (std::vector<std::vector<int> > *edges, 
                        std::vector<int> *deltas, int epsilon, int delta,
