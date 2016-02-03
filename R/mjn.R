@@ -241,7 +241,7 @@ plot.mjn <- function(x, vsize=10, vlabel=NULL,
   }
   if (is.null(vlabel)) { vlabel <- V(g)$name }
   if (is.null(elabel)) {
-    E(g)$label <- round(E(g)$weight)
+    E(g)$label <- ceiling(E(g)$weight)
   }
   if (is.null(layout)) { 
     wmax <- max(E(g)$weight)
@@ -275,12 +275,15 @@ plot.mjn <- function(x, vsize=10, vlabel=NULL,
   }
 }
 
-mjn.merge <- function(mjn.list) {
-  combined.data <- do.call("rbind", lapply(mjn.list, function(x) { x$data } ))
+mjn.merge <- function(mjn.list, skip.data=TRUE) {
+  combined.data = NULL
+  if (!skip.data) {
+    combined.data <- do.call("rbind", lapply(mjn.list, function(x) { x$data } ))
+  }
   graphs <- lapply(mjn.list, function(x) { x$g } )
   G <- graph.disjoint.union(graphs)
-  node.starting.index <- 0
-  edge.starting.index <- 0
+  node.starting.index <- 1
+  edge.starting.index <- 1
   for (i in 1:length(graphs)) {
     g <- graphs[[i]]
     num.nodes <- length(V(g))
